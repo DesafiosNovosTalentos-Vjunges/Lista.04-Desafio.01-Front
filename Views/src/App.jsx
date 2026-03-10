@@ -30,12 +30,16 @@ function App() {
   const [loadingPosts, setLoadingPosts] = useState(true)
   const [newPostTitle, setNewPostTitle] = useState('')
   const [newPostContent, setNewPostContent] = useState('')
-
   const [creatingPost, setCreatingPost] = useState(false)
   const [postError, setPostError] = useState('')
+
   const [visibleComments, setVisibleComments] = useState({})
   const [postComments, setPostComments] = useState({})
   const [newCommentsText, setNewCommentsText] = useState({})
+
+  const [editingPostId, setEditingPostId] = useState(null)
+  const [editPostTitle, setEditPostTitle] = useState('')
+  const [editPostContent, setEditPostContent] = useState('')
 
   useEffect(() => {
     if (token) {
@@ -53,14 +57,14 @@ function App() {
       if (isLoginView) {
         response = await api.post('/auth/login', { email, password })
       } else {
-        response = await api.post('/auth/register', {
-          name,
-          email,
-          password,
-          password_confirmation: password
+        response = await api.post('/auth/register', { 
+          name, 
+          email, 
+          password, 
+          password_confirmation: password 
         })
       }
-
+      
       const novoToken = response.data.access_token
       localStorage.setItem('token', novoToken)
       setToken(novoToken)
@@ -79,7 +83,6 @@ function App() {
     try {
       await api.post('/auth/logout')
     } catch (error) {
-      console.error(error)
     }
     localStorage.removeItem('token')
     setToken(null)
@@ -118,6 +121,52 @@ function App() {
     }
   }
 
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Tem certeza que deseja apagar este post?")) return;
+    try {
+      await api.delete(`/posts/${postId}`)
+      setPosts(posts.filter(p => p.id !== postId))
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erro ao apagar post.')
+    }
+  }
+
+  const handleArchivePost = async (postId) => {
+    if (!window.confirm("Tem certeza que deseja arquivar este post?")) return;
+    try {
+      const response = await api.patch(`/posts/${postId}/archive`)
+      setPosts(posts.map(p => p.id === postId ? response.data : p))
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erro ao arquivar post.')
+    }
+  }
+
+  const startEditingPost = (post) => {
+    setEditingPostId(post.id)
+    setEditPostTitle(post.title)
+    setEditPostContent(post.content)
+  }
+
+  const cancelEditingPost = () => {
+    setEditingPostId(null)
+    setEditPostTitle('')
+    setEditPostContent('')
+  }
+
+  const handleUpdatePost = async (e, postId) => {
+    e.preventDefault()
+    try {
+      const response = await api.put(`/posts/${postId}`, {
+        title: editPostTitle,
+        content: editPostContent
+      })
+      setPosts(posts.map(p => p.id === postId ? response.data : p))
+      cancelEditingPost()
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erro ao atualizar post.')
+    }
+  }
+
   const toggleComments = async (postId) => {
     const isNowVisible = !visibleComments[postId]
     setVisibleComments(prev => ({ ...prev, [postId]: isNowVisible }))
@@ -127,7 +176,6 @@ function App() {
         const response = await api.get(`/posts/${postId}/comments`)
         setPostComments(prev => ({ ...prev, [postId]: response.data }))
       } catch (error) {
-        console.error("Erro ao procurar comentários:", error)
       }
     }
   }
@@ -139,22 +187,32 @@ function App() {
 
     try {
       const response = await api.post(`/posts/${postId}/comments`, { content })
-
       setPostComments(prev => ({
         ...prev,
         [postId]: [...(prev[postId] || []), response.data]
       }))
-
       setNewCommentsText(prev => ({ ...prev, [postId]: '' }))
     } catch (error) {
       alert(error.response?.data?.message || 'Erro ao adicionar o comentário.')
     }
   }
 
+  const handleDeleteComment = async (postId, commentId) => {
+    if (!window.confirm("Tem certeza que deseja apagar este comentário?")) return;
+    try {
+      await api.delete(`/comments/${commentId}`)
+      setPostComments(prev => ({
+        ...prev,
+        [postId]: prev[postId].filter(comment => comment.id !== commentId)
+      }))
+    } catch (error) {
+      alert(error.response?.data?.message || 'Erro ao apagar comentário.')
+    }
+  }
+
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        {/* ... (código do formulário de login mantém-se igual) ... */}
         <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-gray-200">
           <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
             {isLoginView ? 'Entrar' : 'Criar Conta'}
@@ -164,16 +222,16 @@ function App() {
             {!isLoginView && (
               <div>
                 <label className="block text-gray-700 font-medium mb-1">Nome</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required={!isLoginView} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="O seu nome" />
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required={!isLoginView} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="O seu nome"/>
               </div>
             )}
             <div>
               <label className="block text-gray-700 font-medium mb-1">E-mail</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="seu@email.com" />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="seu@email.com"/>
             </div>
             <div>
               <label className="block text-gray-700 font-medium mb-1">Palavra-passe</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••" />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••"/>
             </div>
             <button type="submit" disabled={loadingAuth} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition cursor-pointer disabled:opacity-50">
               {loadingAuth ? 'A processar...' : (isLoginView ? 'Entrar' : 'Registar')}
@@ -199,13 +257,12 @@ function App() {
           </button>
         </div>
 
-        {/* CRIAR NOVO POST */}
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 mb-8">
           <h2 className="text-xl font-bold text-gray-800 mb-4">No que está a pensar?</h2>
           {postError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">{postError}</div>}
           <form onSubmit={handleCreatePost}>
-            <input type="text" value={newPostTitle} onChange={(e) => setNewPostTitle(e.target.value)} required placeholder="Título do post..." className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <textarea value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} required rows="3" placeholder="Escreva o conteúdo..." className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            <input type="text" value={newPostTitle} onChange={(e) => setNewPostTitle(e.target.value)} required placeholder="Título do post..." className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+            <textarea value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} required rows="3" placeholder="Escreva o conteúdo..." className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"/>
             <div className="flex justify-end">
               <button type="submit" disabled={creatingPost || !newPostTitle || !newPostContent} className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition cursor-pointer disabled:opacity-50">
                 Publicar
@@ -214,40 +271,57 @@ function App() {
           </form>
         </div>
 
-        {/* LISTA DE POSTS */}
         {loadingPosts ? (
           <p className="text-center text-gray-500 font-medium">A carregar os seus posts do Laravel...</p>
         ) : (
           <div className="space-y-6">
             {posts.length === 0 && <p className="text-center text-gray-500">Nenhum post encontrado.</p>}
-
+            
             {posts.map(post => (
               <div key={post.id} className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-2xl font-semibold text-blue-600">{post.title}</h2>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${post.status === 'PUBLISHED' ? 'bg-green-100 text-green-700' : post.status === 'ARCHIVED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                    {post.status}
-                  </span>
-                </div>
-                <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                
+                {editingPostId === post.id ? (
+                  <form onSubmit={(e) => handleUpdatePost(e, post.id)} className="mb-4">
+                    <input type="text" value={editPostTitle} onChange={(e) => setEditPostTitle(e.target.value)} required className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-2 font-semibold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <textarea value={editPostContent} onChange={(e) => setEditPostContent(e.target.value)} required rows="3" className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={cancelEditingPost} className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded text-sm transition cursor-pointer">Cancelar</button>
+                      <button type="submit" className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm transition cursor-pointer">Guardar</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start mb-4">
+                      <h2 className="text-2xl font-semibold text-blue-600">{post.title}</h2>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${post.status === 'PUBLISHED' ? 'bg-green-100 text-green-700' : post.status === 'ARCHIVED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {post.status}
+                      </span>
+                    </div>
+                    <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                  </>
+                )}
+
                 <div className="mt-4 text-xs text-gray-400 border-t pt-4 flex justify-between items-center">
                   <span>Publicado em: {new Date(post.created_at).toLocaleDateString('pt-PT')}</span>
-
-                  {/* BOTÃO PARA ABRIR COMENTÁRIOS */}
-                  <button
-                    onClick={() => toggleComments(post.id)}
-                    className="text-blue-500 font-medium hover:underline cursor-pointer"
-                  >
-                    {visibleComments[post.id] ? 'Esconder Comentários' : 'Ver Comentários'}
-                  </button>
+                  
+                  <div className="flex gap-3">
+                    {post.status !== 'ARCHIVED' && editingPostId !== post.id && (
+                      <>
+                        <button onClick={() => startEditingPost(post)} className="text-blue-500 hover:underline cursor-pointer">Editar</button>
+                        <button onClick={() => handleArchivePost(post.id)} className="text-yellow-600 hover:underline cursor-pointer">Arquivar</button>
+                      </>
+                    )}
+                    <button onClick={() => handleDeletePost(post.id)} className="text-red-500 hover:underline cursor-pointer">Apagar</button>
+                    <button onClick={() => toggleComments(post.id)} className="text-blue-500 font-medium hover:underline cursor-pointer ml-2">
+                      {visibleComments[post.id] ? 'Esconder Comentários' : 'Ver Comentários'}
+                    </button>
+                  </div>
                 </div>
 
-                {/* SECÇÃO DE COMENTÁRIOS (Expansível) */}
                 {visibleComments[post.id] && (
                   <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <h3 className="font-semibold text-gray-700 mb-3">Comentários</h3>
-
-                    {/* Lista dos Comentários do Post */}
+                    
                     <div className="space-y-3 mb-4">
                       {!postComments[post.id] ? (
                         <p className="text-sm text-gray-500">A carregar...</p>
@@ -255,28 +329,24 @@ function App() {
                         <p className="text-sm text-gray-500 italic">Ainda não existem comentários. Seja o primeiro!</p>
                       ) : (
                         postComments[post.id].map(comment => (
-                          <div key={comment.id} className="bg-white p-3 rounded border border-gray-100 shadow-sm">
-                            {/* Assumindo que a sua API traz a relação com o utilizador (author.name) */}
-                            <p className="text-xs font-bold text-gray-800 mb-1">
-                              {comment.author ? comment.author.name : 'Utilizador'}
-                            </p>
-                            <p className="text-sm text-gray-600">{comment.content}</p>
+                          <div key={comment.id} className="bg-white p-3 rounded border border-gray-100 shadow-sm flex justify-between items-start">
+                            <div>
+                              <p className="text-xs font-bold text-gray-800 mb-1">
+                                {comment.author ? comment.author.name : 'Utilizador'}
+                              </p>
+                              <p className="text-sm text-gray-600">{comment.content}</p>
+                            </div>
+                            <button onClick={() => handleDeleteComment(post.id, comment.id)} className="text-red-400 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 transition cursor-pointer" title="Apagar comentário">
+                              ✕
+                            </button>
                           </div>
                         ))
                       )}
                     </div>
 
-                    {/* Formulário para novo Comentário */}
                     {post.status !== 'ARCHIVED' ? (
                       <form onSubmit={(e) => handleAddComment(e, post.id)} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newCommentsText[post.id] || ''}
-                          onChange={(e) => setNewCommentsText(prev => ({ ...prev, [post.id]: e.target.value }))}
-                          placeholder="Escreva um comentário..."
-                          required
-                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        <input type="text" value={newCommentsText[post.id] || ''} onChange={(e) => setNewCommentsText(prev => ({ ...prev, [post.id]: e.target.value }))} placeholder="Escreva um comentário..." required className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
                         <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition cursor-pointer">
                           Enviar
                         </button>
